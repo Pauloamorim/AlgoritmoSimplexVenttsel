@@ -2,6 +2,7 @@ package com.pca.simplex.service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -15,22 +16,39 @@ import com.pca.simplex.pojo.estatico.TipoFuncaoObjetivo;
 @Service
 public final class SimplexService {
 
+	private static final BigDecimal IDENTIFICADOR_COLUNA_MEMBRO_LIVRE = new BigDecimal("0.1");
+	private static final BigDecimal IDENTIFICADOR_LINHA_FUNCAO_OBJETIVA = new BigDecimal("0.2");
 	private  final String POSITIVO = "positivo";
 	private  final String NEGATIVO = "negativo";
 	private  final BigDecimal UM_NEGATIVO = new BigDecimal("-1");
 	private  BigDecimal[][] tabelaSubCelulaSuperior;
 	private  BigDecimal[][] tabelaSubCelulaInferior;
+	private  List<BigDecimal> listaVariaveisDecisaoRetornaraoValor = new ArrayList<BigDecimal>();
 
 	public  void  calcularSimplex(DadoFuncaoObjetivo dadoFuncaoObjetiva) throws RuntimeException{
+		listaVariaveisDecisaoRetornaraoValor = new ArrayList<BigDecimal>(0);
 		System.out.println("-----------------------INICIO CALCULO SIMPLEX---------------");
-		//monta a tabela do método simplex	
-		tabelaSubCelulaSuperior = new BigDecimal[dadoFuncaoObjetiva.getListaDadosRestricoes().size()+1][dadoFuncaoObjetiva.getListaSentencasFuncaoObjetiva().size()+1];
-		tabelaSubCelulaInferior = new BigDecimal[dadoFuncaoObjetiva.getListaDadosRestricoes().size()+1][dadoFuncaoObjetiva.getListaSentencasFuncaoObjetiva().size()+1];
+		
+		
+		/**
+		 * A matriz foi montada com o tamanho da linha + 2, para contemplar além das retrições, 
+		 *  adicionar a linha de identificação(aonde ficaram x1,x2,membroLivre, FO) e
+		 *  a linha da função Objetiva FO
+		 */
+		tabelaSubCelulaSuperior = new BigDecimal[dadoFuncaoObjetiva.getListaDadosRestricoes().size()+2][dadoFuncaoObjetiva.getListaSentencasFuncaoObjetiva().size()+2];
+		tabelaSubCelulaInferior = new BigDecimal[dadoFuncaoObjetiva.getListaDadosRestricoes().size()+2][dadoFuncaoObjetiva.getListaSentencasFuncaoObjetiva().size()+2];
 		
 		alterarTipoFuncaoObjetiva(dadoFuncaoObjetiva);
 		adicionaVariaveisAuxiliares(dadoFuncaoObjetiva);
+		
+		printarRestricoes(dadoFuncaoObjetiva);
+		
+		nomearLinhasColunasIdentificadoras(dadoFuncaoObjetiva);
+		
 		preencheFuncaoObjetivaTabelaSimplex(dadoFuncaoObjetiva);
 		preencheRestricoesTabelaSimplex(dadoFuncaoObjetiva);
+		
+		imprimirTabela();
 		
 		procurarVariavelBasicaMembroLivreNegativo();
 		
@@ -63,7 +81,7 @@ public final class SimplexService {
 		for (DadoRestricao dadoRestricao : dadoFuncaoObjetiva.getListaDadosRestricoes()) {
 			
 			BigDecimal valor;
-			if(SinalOperacao.MAIOR_IGUAL.equals(dadoRestricao.getSinalOperacao()))
+			if(SinalOperacao.MAIOR_IGUAL.equals(dadoRestricao.getSinalOperacao()) || SinalOperacao.MAIOR.equals(dadoRestricao.getSinalOperacao()))
 				valor = UM_NEGATIVO;
 			else
 				valor = BigDecimal.ONE;
@@ -77,8 +95,59 @@ public final class SimplexService {
 		}
 	}
 	/**
+	 * Este método irá preencher as colunas que definem as variáveis, exemplo:
+	 * 
+	 * 			Membro Livre	| 		x1		| 		X2
+	 * F(x)
+	 * x3
+	 * x4
+	 * x5
+	 * 
+	 * 
+	 * Como a matriz é do tipo {@link BigDecimal}, a letra "x" é omitida.
+	 * Para o Membro Livre, foi definido o número 0,1
+	 * Para a F(x), foi definido o número 0,2
+	 * @param dadoFuncaoObjetiva
+	 */
+	private void nomearLinhasColunasIdentificadoras(DadoFuncaoObjetivo dadoFuncaoObjetiva) {
+		
+		//preenche as colunas
+		int controlaLista = 0;
+		for (int i = 0; i <=  dadoFuncaoObjetiva.getListaSentencasFuncaoObjetiva().size()+1; i++) {
+			if(i==0){
+				tabelaSubCelulaSuperior[0][i] = BigDecimal.ZERO;
+				tabelaSubCelulaInferior[0][i] = BigDecimal.ZERO;
+			}
+			//coluna que identifica membro livre
+			else if(i == 1){
+				tabelaSubCelulaSuperior[0][i] = IDENTIFICADOR_COLUNA_MEMBRO_LIVRE;
+				tabelaSubCelulaInferior[0][i] = IDENTIFICADOR_COLUNA_MEMBRO_LIVRE;
+			}
+			else{
+				BigDecimal identificadorVariavel = new BigDecimal(dadoFuncaoObjetiva.getListaSentencasFuncaoObjetiva().get(controlaLista).getNome().substring(1));
+				tabelaSubCelulaSuperior[0][i] = identificadorVariavel;
+				tabelaSubCelulaInferior[0][i] = identificadorVariavel;
+				listaVariaveisDecisaoRetornaraoValor.add(identificadorVariavel);
+				controlaLista++;
+			}
+		}
+		
+
+		//preenche as linhas
+		
+		int indiceLinha = 2; //começa da linha 2, pois as linhas 0 e 1 já foram preenchidas 
+		tabelaSubCelulaSuperior[1][0] = IDENTIFICADOR_LINHA_FUNCAO_OBJETIVA;
+		tabelaSubCelulaInferior[1][0] = IDENTIFICADOR_LINHA_FUNCAO_OBJETIVA;
+		for (DadoRestricao dadoRestricao : dadoFuncaoObjetiva.getListaDadosRestricoes()) {
+			BigDecimal identificadorVariavel = new BigDecimal(dadoRestricao.getListaValoresRestricoes().get(dadoRestricao.getListaValoresRestricoes().size()-1).getNome().substring(1));
+			tabelaSubCelulaSuperior[indiceLinha][0] = identificadorVariavel;
+			tabelaSubCelulaInferior[indiceLinha][0] = identificadorVariavel;
+			indiceLinha++;
+		}
+	}
+	/**
 	 * Obtem o próximo nome para a variável auxiliar, exemplo:
-	 * 		80x1 + 60x2 -> O método retornara 3 que será a próxima variável de decisão
+	 * 		80x1 + 60x2 -> O método retornara 3 que será a próxima variável auxiliar
 	 * 
 	 * @param listaSentencasFuncaoObjetiva
 	 * @return {@link Integer}
@@ -94,32 +163,36 @@ public final class SimplexService {
 	private  void preencheFuncaoObjetivaTabelaSimplex(DadoFuncaoObjetivo dadoFuncaoObjetiva) {
 		//preenchendo a tabela, parte função objetiva
 		int controlaLista = 0;
-		for (int i = 0; i <=  dadoFuncaoObjetiva.getListaSentencasFuncaoObjetiva().size(); i++) {
-			if(i==0)
-				tabelaSubCelulaSuperior[0][i] = BigDecimal.ZERO;
+		//começa do indice 1, pois o zero é só o identificador das variaveis
+		for (int i = 1; i <=  dadoFuncaoObjetiva.getListaSentencasFuncaoObjetiva().size()+1; i++) {
+			if(i==1)
+				tabelaSubCelulaSuperior[1][i] = BigDecimal.ZERO;
 			else{
-				tabelaSubCelulaSuperior[0][i] = dadoFuncaoObjetiva.getListaSentencasFuncaoObjetiva().get(controlaLista).getValor().multiply(UM_NEGATIVO);
+				tabelaSubCelulaSuperior[1][i] = dadoFuncaoObjetiva.getListaSentencasFuncaoObjetiva().get(controlaLista).getValor().multiply(UM_NEGATIVO);	
 				controlaLista++;
 			}
 		}
 	}
+	
 	/**
 	 * preenche as linhas e colunas das restrições na tabela SIMPLEX
 	 * @param dadoFuncaoObjetiva
 	 * @param tabelaSubCelulaSuperior
 	 */
 	private  void preencheRestricoesTabelaSimplex(DadoFuncaoObjetivo dadoFuncaoObjetiva) {
-		int linha = 1;
+		int linha = 2;
 		int controlaListaRestricao = 0;
 		BigDecimal valorVariavelAuxiliar = BigDecimal.ZERO;
 		
 		for (DadoRestricao dadoRestricao : dadoFuncaoObjetiva.getListaDadosRestricoes()) {
 			controlaListaRestricao = 0;
-			//TODO POSSÍVEL PONTO DE ERRO, INFERIMOS QUE SE A VARIAVEL AUXILIAR FOR NEGATIVA, TODOS OS VALORES TAMBÉM SERÃO NEGATIVOS
-			//E SE POSITIVO, TODOS ELEMENTO SERÃO POSITIVOS
+			
+			//retorna se a variavel auxiliar é positiva ou negativa
+			//TODO CONTINUAR COMENTANDO DAQUI
 			valorVariavelAuxiliar = dadoRestricao.getListaValoresRestricoes().get(dadoRestricao.getListaValoresRestricoes().size()-1).getValor();
-			for (int j = 0; j <  dadoRestricao.getListaValoresRestricoes().size(); j++) {
-				if(j == 0)
+			
+			for (int j = 1; j <=  dadoRestricao.getListaValoresRestricoes().size(); j++) {
+				if(j == 1)
 					tabelaSubCelulaSuperior[linha][j] = dadoRestricao.getResultado().multiply(valorVariavelAuxiliar).setScale(3,RoundingMode.HALF_EVEN);
 				else{
 					tabelaSubCelulaSuperior[linha][j] = dadoRestricao.getListaValoresRestricoes().get(controlaListaRestricao).getValor().multiply(valorVariavelAuxiliar).setScale(3,RoundingMode.HALF_EVEN);
@@ -131,6 +204,11 @@ public final class SimplexService {
 	}
 	@SuppressWarnings("unused")
 	private  void printarRestricoes(DadoFuncaoObjetivo dadoFuncaoObjetiva) {
+		for (ValorSentenca val : dadoFuncaoObjetiva.getListaSentencasFuncaoObjetiva()) {
+			System.out.print(" ".concat((val.getValor().compareTo(BigDecimal.ZERO) == 1 ? "+" : "")
+					.concat(val.getValor().toString()).concat(val.getNome())));
+		}
+		System.out.println();
 		for (DadoRestricao dadoRestricao : dadoFuncaoObjetiva.getListaDadosRestricoes()) {
 			for (ValorSentenca valorSentenca : dadoRestricao.getListaValoresRestricoes()) {
 				System.out.print(" ".concat((valorSentenca.getValor().compareTo(BigDecimal.ZERO) == 1 ? "+" : "")
@@ -151,16 +229,18 @@ public final class SimplexService {
 	private  void procurarVariavelBasicaMembroLivreNegativo() throws RuntimeException {
 		//1ª Fase, passo 1
 		//procura uma variável básica com membro livro negativo;
-		for (int i = 1; i < tabelaSubCelulaSuperior.length; i++) {
-			if(tabelaSubCelulaSuperior[i][0].compareTo(BigDecimal.ZERO) == -1){
+		boolean encontrou = false;
+		for (int i = 2; i < tabelaSubCelulaSuperior.length; i++) {
+			if(tabelaSubCelulaSuperior[i][1].compareTo(BigDecimal.ZERO) == -1){
 				// passo 1.1
-				System.out.println("Variável básica negativa -> "+tabelaSubCelulaSuperior[i][0].toString());
+				encontrou = true;
+				System.out.println("Variável básica negativa -> "+tabelaSubCelulaSuperior[i][1].toString());
 				System.out.println("Indice da linha da variável básica negativa -> "+i);
 				procurarElementoNegativoNaLinha(i);
-			}else{
-				executaSegundaFaseAlgoritmoSimplex();
 			}
 		}
+		if(!encontrou)
+			executaSegundaFaseAlgoritmoSimplex();
 	}
 
 	/**
@@ -176,7 +256,7 @@ public final class SimplexService {
 	private  void procurarElementoNegativoNaLinha(int indiceLinhaPossuiMembroLivreNegativo) throws RuntimeException {
 		BigDecimal elementoPermitido = null;
 		Integer indiceColunaPermitida = null;
-		for (int i = 1; i < tabelaSubCelulaSuperior[indiceLinhaPossuiMembroLivreNegativo].length; i++) {
+		for (int i = 2; i < tabelaSubCelulaSuperior[indiceLinhaPossuiMembroLivreNegativo].length; i++) {
 		
 			//verifica se é negativo o valor
 			if(tabelaSubCelulaSuperior[indiceLinhaPossuiMembroLivreNegativo][i].compareTo(BigDecimal.ZERO) == -1){
@@ -204,13 +284,13 @@ public final class SimplexService {
 	private  void procurarLinhaPermitida(Integer indiceColunaPermitida) throws RuntimeException {
 		Integer indiceLinhaPermitida = null;
 		BigDecimal resultadoDivisao = new BigDecimal(Integer.MAX_VALUE); //Integer.MAX_VALUE para garantir que o primeiro valor seja sempre atribuido
-		for (int i = 1; i < tabelaSubCelulaSuperior.length; i++) {
-			BigDecimal membroLivre = tabelaSubCelulaSuperior[i][0];
+		for (int i = 2; i < tabelaSubCelulaSuperior.length; i++) {
+			BigDecimal membroLivre = tabelaSubCelulaSuperior[i][1];
 			BigDecimal elemento = tabelaSubCelulaSuperior[i][indiceColunaPermitida];
 			
 			//Só é quociente valido se o numerador e o denomidador possuirem o mesmo sinal e o denominador for diferente de zero
 			if(verificarSinalElemento(elemento).equals(verificarSinalElemento(membroLivre)) && elemento.compareTo(BigDecimal.ZERO) != 0){
-				BigDecimal resultadoAux = membroLivre.divide(elemento).setScale(3,RoundingMode.HALF_EVEN);
+				BigDecimal resultadoAux = membroLivre.divide(elemento,3,RoundingMode.HALF_UP);
 				//se o resultado da divisão atual for menor que o que está gravado na variável resultadoDivisao, atribui novamente
 				if(resultadoAux.compareTo(resultadoDivisao) == -1){
 					resultadoDivisao = resultadoAux;
@@ -251,8 +331,8 @@ public final class SimplexService {
 		
 		imprimirTabela();
 		
-		for (int i = 1; i < tabelaSubCelulaSuperior.length; i++) {
-			if(tabelaSubCelulaSuperior[i][0].compareTo(BigDecimal.ZERO) == -1){
+		for (int i = 2; i < tabelaSubCelulaSuperior.length; i++) {
+			if(tabelaSubCelulaSuperior[i][1].compareTo(BigDecimal.ZERO) == -1){
 				encontrouVariavelBasicaMembroLivreNegativo = true;
 				procurarVariavelBasicaMembroLivreNegativo();
 			}
@@ -265,7 +345,7 @@ public final class SimplexService {
 	}
 
 	private  BigDecimal calculaInversoElementoPermitido(Integer indiceLinhaPermitida, Integer indiceColunaPermitida) {
-		return BigDecimal.ONE.divide(tabelaSubCelulaSuperior[indiceLinhaPermitida][indiceColunaPermitida]);
+		return BigDecimal.ONE.divide(tabelaSubCelulaSuperior[indiceLinhaPermitida][indiceColunaPermitida],3,RoundingMode.HALF_UP);
 	}
 
 	/**
@@ -277,7 +357,7 @@ public final class SimplexService {
 	 */
 	private  void multiplicarLinhaPermitidaPorElementoPermitidoInvertido(BigDecimal elementoPermitidoInvertido,
 			Integer indiceLinhaPermitida, Integer indiceColunaPermitida) {
-		for (int i = 0; i < tabelaSubCelulaSuperior[indiceLinhaPermitida].length; i++) {
+		for (int i = 1; i < tabelaSubCelulaSuperior[indiceLinhaPermitida].length; i++) {
 			//verificação para não alterar o valor do elemento permitido que já foi calculado
 			if(i != indiceColunaPermitida)
 				tabelaSubCelulaInferior[indiceLinhaPermitida][i] = tabelaSubCelulaSuperior[indiceLinhaPermitida][i].multiply(elementoPermitidoInvertido).setScale(3,RoundingMode.HALF_EVEN);
@@ -292,7 +372,7 @@ public final class SimplexService {
 	 */
 	private  void multiplicarColunaPermitidaPorElementoPermitidoInvertido(BigDecimal elementoPermitidoInvertido,
 			Integer indiceLinhaPermitida, Integer indiceColunaPermitida) {
-		for (int i = 0; i < tabelaSubCelulaSuperior.length; i++) {
+		for (int i = 1; i < tabelaSubCelulaSuperior.length; i++) {
 			
 			//verificação para não alterar o valor do elemento permitido que já foi calculado
 			if(i != indiceLinhaPermitida)
@@ -310,11 +390,11 @@ public final class SimplexService {
 	 */
 	private  void preencherTodasCelulasTabelaSubCelulaInferiorVazias(Integer indiceLinhaPermitida,
 			Integer indiceColunaPermitida) {
-		for (int i = 0; i < tabelaSubCelulaInferior.length; i++) {
+		for (int i = 1; i < tabelaSubCelulaInferior.length; i++) {
 			
 			//busca o elemento que já possui valor na coluna permitida, na tabela tabelaSubCelulaInferior
 			BigDecimal elementoMarcadoLinha = tabelaSubCelulaInferior[i][indiceColunaPermitida];
-			for (int j = 0; j < tabelaSubCelulaInferior[i].length; j++) {
+			for (int j = 1; j < tabelaSubCelulaInferior[i].length; j++) {
 				
 				//busca o elemento que já possui valor na linha permitida, na tabela tabelaSubCelulaSuperior
 				BigDecimal elementoMarcadoColuna = tabelaSubCelulaSuperior[indiceLinhaPermitida][j];
@@ -328,10 +408,21 @@ public final class SimplexService {
 	private  void inverterLinhaPermitidaComColunaPermitida(Integer indiceLinhaPermitida,
 			Integer indiceColunaPermitida) {
 		
-		//TODO QUANDO ADICIONAR O NOME DA RESTRIÇÃO NAS MATRIZES(X1,X2), MUDAR a linha de posição com a coluna
+		//TODO COMENTAR
+		BigDecimal colunaInvertida = tabelaSubCelulaSuperior[0][indiceColunaPermitida];
+		BigDecimal linhaInvertida = tabelaSubCelulaSuperior[indiceLinhaPermitida][0];
 		
-		for (int i = 0; i < tabelaSubCelulaSuperior.length; i++) {
-			for (int j = 0; j < tabelaSubCelulaSuperior[i].length; j++) {
+		tabelaSubCelulaSuperior[0][indiceColunaPermitida] = linhaInvertida;
+		tabelaSubCelulaInferior[0][indiceColunaPermitida] = linhaInvertida;
+		
+		tabelaSubCelulaSuperior[indiceLinhaPermitida][0] = colunaInvertida ;
+		tabelaSubCelulaInferior[indiceLinhaPermitida][0] = colunaInvertida;
+		
+		
+		
+		
+		for (int i = 1; i < tabelaSubCelulaSuperior.length; i++) {
+			for (int j = 1; j < tabelaSubCelulaSuperior[i].length; j++) {
 				
 				//se pertencer a linha ou a coluna permitida, somente transporta o valor para a tabela superior
 				if(i == indiceLinhaPermitida || j == indiceColunaPermitida){
@@ -371,14 +462,34 @@ public final class SimplexService {
 	 */
 	private  void procurarElementoPositivoLinhaFuncaoObjetivo() throws RuntimeException {
 		//não considera o membro livre
-		for (int i = 1; i < tabelaSubCelulaSuperior[0].length; i++) {
-			if(tabelaSubCelulaSuperior[0][i].compareTo(BigDecimal.ZERO) == 1 ){
+		for (int i = 2; i < tabelaSubCelulaSuperior[1].length; i++) {
+			if(tabelaSubCelulaSuperior[1][i].compareTo(BigDecimal.ZERO) == 1 ){
 				procuraElementoPositivoColunaPermitida(i);
 			}
 		}
 		System.out.println("\n\n\nChegou na solução ótima");
+		String valoresVariaveisFuncaoObjetiva = encontrarValoresFinaisVariaveisFuncaoObjetiva();
 		imprimirTabela();
-		throw new RuntimeException("Solução encontrada");//TODO PASSAR O NOME DAS VARIAVEIS DA FUNÇÃO OBJETIVO
+		throw new RuntimeException("Solução ótima encontrada -> "+valoresVariaveisFuncaoObjetiva);
+	}
+
+	//TODO COMENTAR
+	private String encontrarValoresFinaisVariaveisFuncaoObjetiva() {
+		String retorno = "";
+		for (BigDecimal valorVariavelDecisao : listaVariaveisDecisaoRetornaraoValor) {
+			for (int i = 2; i < tabelaSubCelulaSuperior.length; i++) {
+					if(tabelaSubCelulaSuperior[i][0] == valorVariavelDecisao){
+						retorno = retorno.concat("X").concat(valorVariavelDecisao.toString()).concat(" = ").
+								concat(tabelaSubCelulaSuperior[i][1].toString()).concat(" ");
+						break;
+					}
+			}
+			if(retorno == ""){
+				retorno = retorno.concat("X").concat(valorVariavelDecisao.toString()).concat(" = ").
+						concat("0").concat(" ");
+			}
+		}
+		return retorno;
 	}
 
 	/**
@@ -390,7 +501,7 @@ public final class SimplexService {
 	 * @throws RuntimeException 
 	 */
 	private  void procuraElementoPositivoColunaPermitida(int indiceColuna) throws RuntimeException {
-		 for (int i = 1; i < tabelaSubCelulaSuperior.length; i++) {
+		 for (int i = 2; i < tabelaSubCelulaSuperior.length; i++) {
 			if(tabelaSubCelulaSuperior[i][indiceColuna].compareTo(BigDecimal.ZERO) == 1){
 				procurarLinhaPermitida(indiceColuna);
 			}

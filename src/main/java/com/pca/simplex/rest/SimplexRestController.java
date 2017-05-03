@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.pca.simplex.pojo.DadoFuncaoObjetivo;
 import com.pca.simplex.service.SimplexService;
-import com.pca.simplex.util.Simplex;
+
 
 @RestController
 public class SimplexRestController {
