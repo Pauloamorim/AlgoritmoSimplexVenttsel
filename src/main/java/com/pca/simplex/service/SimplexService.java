@@ -188,13 +188,14 @@ public final class SimplexService {
 			controlaListaRestricao = 0;
 			
 			//retorna se a variavel auxiliar é positiva ou negativa
-			//TODO CONTINUAR COMENTANDO DAQUI
 			valorVariavelAuxiliar = dadoRestricao.getListaValoresRestricoes().get(dadoRestricao.getListaValoresRestricoes().size()-1).getValor();
 			
 			for (int j = 1; j <=  dadoRestricao.getListaValoresRestricoes().size(); j++) {
+				//preenche o valor do membro livre
 				if(j == 1)
 					tabelaSubCelulaSuperior[linha][j] = dadoRestricao.getResultado().multiply(valorVariavelAuxiliar).setScale(3,RoundingMode.HALF_EVEN);
 				else{
+					//preenche as demais variáveis
 					tabelaSubCelulaSuperior[linha][j] = dadoRestricao.getListaValoresRestricoes().get(controlaListaRestricao).getValor().multiply(valorVariavelAuxiliar).setScale(3,RoundingMode.HALF_EVEN);
 					controlaListaRestricao++;
 				}
@@ -202,7 +203,11 @@ public final class SimplexService {
 			linha++;
 		}
 	}
-	@SuppressWarnings("unused")
+	
+	/**
+	 * Método auxiliar para imprimir a função objetiva e as restrições
+	 * @param dadoFuncaoObjetiva
+	 */
 	private  void printarRestricoes(DadoFuncaoObjetivo dadoFuncaoObjetiva) {
 		for (ValorSentenca val : dadoFuncaoObjetiva.getListaSentencasFuncaoObjetiva()) {
 			System.out.print(" ".concat((val.getValor().compareTo(BigDecimal.ZERO) == 1 ? "+" : "")
@@ -236,16 +241,18 @@ public final class SimplexService {
 				encontrou = true;
 				System.out.println("Variável básica negativa -> "+tabelaSubCelulaSuperior[i][1].toString());
 				System.out.println("Indice da linha da variável básica negativa -> "+i);
+				//encontrou o elemento negativo e vai para o 2º passo
 				procurarElementoNegativoNaLinha(i);
 			}
 		}
+		//não encontrou o elemento negativo, vai para a Fase 2 do algoritmo
 		if(!encontrou)
 			executaSegundaFaseAlgoritmoSimplex();
 	}
 
 	/**
 	 * 1ª Fase - passo 2<br>
-	 * Procura um elmento negativo na linha em que foi encontrado o membro livre negativo
+	 * Procura um elemento negativo na linha em que foi encontrado o membro livre negativo
 	 * 	- se encontrar: A coluna onde o elemento foi encontrado é considerada permissível
 	 * 	- se não encontrar: A Solução permissível não existe
 	 * 
@@ -260,14 +267,17 @@ public final class SimplexService {
 		
 			//verifica se é negativo o valor
 			if(tabelaSubCelulaSuperior[indiceLinhaPossuiMembroLivreNegativo][i].compareTo(BigDecimal.ZERO) == -1){
+				//encontrou o elemento negativo
 				elementoPermitido = tabelaSubCelulaSuperior[indiceLinhaPossuiMembroLivreNegativo][i];
 				indiceColunaPermitida = i;
 				break;
 			}
 		}
+		//elemento negativo não existe, Solução permissível inexistente
 		if(elementoPermitido == null && indiceColunaPermitida == null){
 			throw new RuntimeException("Solução Permissível Não Existe");
 		}else{
+			//encontrou o elemento negativo, irá para o passo 3 procurar a linha permitida
 			System.out.println("Elemento negativo na linha -> "+elementoPermitido.toString());
 			System.out.println("Indice da coluna do elemento permitido -> "+indiceColunaPermitida);
 			procurarLinhaPermitida(indiceColunaPermitida);
@@ -277,7 +287,7 @@ public final class SimplexService {
 	/**
 	 * 1ª Fase - passo 3
 	 * 	Busca a linha permitida, a partir do menor resultado da divisão do membro livre pelos elementos da coluna permitida<br>
-	 * 	-** Só é quociente valido se o numerador e o denomidador possuirem o mesmo sinal e o denominador for maior que zero
+	 * 	-** Só é quociente valido se o numerador e o denomidador possuirem o mesmo sinal e o denominador for diferente que zero
 	 * @param indiceColunaPermitida
 	 * @throws RuntimeException 
 	 */
@@ -290,7 +300,9 @@ public final class SimplexService {
 			
 			//Só é quociente valido se o numerador e o denomidador possuirem o mesmo sinal e o denominador for diferente de zero
 			if(verificarSinalElemento(elemento).equals(verificarSinalElemento(membroLivre)) && elemento.compareTo(BigDecimal.ZERO) != 0){
+				//executa a divisão do membro livre pelo elemento
 				BigDecimal resultadoAux = membroLivre.divide(elemento,3,RoundingMode.HALF_UP);
+				
 				//se o resultado da divisão atual for menor que o que está gravado na variável resultadoDivisao, atribui novamente
 				if(resultadoAux.compareTo(resultadoDivisao) == -1){
 					resultadoDivisao = resultadoAux;
@@ -365,18 +377,20 @@ public final class SimplexService {
 	}
 	/**
 	 * Algoritmo de Troca - Passo 3
-	 * 	Multiplica toda a coluna permitida pelo - ( elemento permitido inverso)
+	 * 	Multiplica toda a coluna permitida pelo  elemento permitido inverso multiplicado por -1
 	 * @param elementoPermitidoInvertido
 	 * @param indiceLinhaPermitida
 	 * @param indiceColunaPermitida 
 	 */
 	private  void multiplicarColunaPermitidaPorElementoPermitidoInvertido(BigDecimal elementoPermitidoInvertido,
 			Integer indiceLinhaPermitida, Integer indiceColunaPermitida) {
+		BigDecimal elementoPermitidoMultiplicadoUmNegativo = elementoPermitidoInvertido.multiply(UM_NEGATIVO);
 		for (int i = 1; i < tabelaSubCelulaSuperior.length; i++) {
 			
 			//verificação para não alterar o valor do elemento permitido que já foi calculado
-			if(i != indiceLinhaPermitida)
-				tabelaSubCelulaInferior[i][indiceColunaPermitida] = tabelaSubCelulaSuperior[i][indiceColunaPermitida].multiply(elementoPermitidoInvertido.multiply(UM_NEGATIVO)).setScale(3,RoundingMode.HALF_EVEN);
+			if(i != indiceLinhaPermitida) {
+				tabelaSubCelulaInferior[i][indiceColunaPermitida] = tabelaSubCelulaSuperior[i][indiceColunaPermitida].multiply(elementoPermitidoMultiplicadoUmNegativo).setScale(3,RoundingMode.HALF_EVEN);
+			}
 		}
 		
 	}
@@ -405,26 +419,31 @@ public final class SimplexService {
 		}
 	}
 	
+	/**
+	 * Inverte o identificador da linha permitida com o identificador da coluna permitida
+	 * @param indiceLinhaPermitida
+	 * @param indiceColunaPermitida
+	 */
 	private  void inverterLinhaPermitidaComColunaPermitida(Integer indiceLinhaPermitida,
 			Integer indiceColunaPermitida) {
 		
-		//TODO COMENTAR
+		//obtem os valores identificadores da linha e coluna permitidas
 		BigDecimal colunaInvertida = tabelaSubCelulaSuperior[0][indiceColunaPermitida];
 		BigDecimal linhaInvertida = tabelaSubCelulaSuperior[indiceLinhaPermitida][0];
 		
+		//inverte a coluna na tabela superior e inferior
 		tabelaSubCelulaSuperior[0][indiceColunaPermitida] = linhaInvertida;
 		tabelaSubCelulaInferior[0][indiceColunaPermitida] = linhaInvertida;
 		
+		//inverte a linha na tabela superior e inferior
 		tabelaSubCelulaSuperior[indiceLinhaPermitida][0] = colunaInvertida ;
 		tabelaSubCelulaInferior[indiceLinhaPermitida][0] = colunaInvertida;
 		
-		
-		
-		
+		// monta a nova tabela após executar o algoritmo de troca
 		for (int i = 1; i < tabelaSubCelulaSuperior.length; i++) {
 			for (int j = 1; j < tabelaSubCelulaSuperior[i].length; j++) {
 				
-				//se pertencer a linha ou a coluna permitida, somente transporta o valor para a tabela superior
+				//se pertencer a linha ou a coluna permitida, somente transporta o valor da tabela inferior para a tabela superior
 				if(i == indiceLinhaPermitida || j == indiceColunaPermitida){
 					tabelaSubCelulaSuperior[i][j] = tabelaSubCelulaInferior[i][j];
 				}else{
@@ -464,16 +483,21 @@ public final class SimplexService {
 		//não considera o membro livre
 		for (int i = 2; i < tabelaSubCelulaSuperior[1].length; i++) {
 			if(tabelaSubCelulaSuperior[1][i].compareTo(BigDecimal.ZERO) == 1 ){
+				//encontrou elemento positivo na linha da função objetiva, irá procurar um elemento positivo na coluna agora
 				procuraElementoPositivoColunaPermitida(i);
 			}
 		}
+		//não existe elemento positivo, logo chegou a solução ótima
 		System.out.println("\n\n\nChegou na solução ótima");
 		String valoresVariaveisFuncaoObjetiva = encontrarValoresFinaisVariaveisFuncaoObjetiva();
 		imprimirTabela();
 		throw new RuntimeException("Solução ótima encontrada -> "+valoresVariaveisFuncaoObjetiva);
 	}
 
-	//TODO COMENTAR
+	/**
+	 * Função executada quando a solução ótima é encontrada para retornar os valores no JSON
+	 * @return
+	 */
 	private String encontrarValoresFinaisVariaveisFuncaoObjetiva() {
 		String retorno = "";
 		for (BigDecimal valorVariavelDecisao : listaVariaveisDecisaoRetornaraoValor) {
@@ -503,12 +527,17 @@ public final class SimplexService {
 	private  void procuraElementoPositivoColunaPermitida(int indiceColuna) throws RuntimeException {
 		 for (int i = 2; i < tabelaSubCelulaSuperior.length; i++) {
 			if(tabelaSubCelulaSuperior[i][indiceColuna].compareTo(BigDecimal.ZERO) == 1){
+				//encontrou o elemento positivo na linha, irá procurar qual é a a linha permitida
 				procurarLinhaPermitida(indiceColuna);
 			}
 		}
+		 //não encontrou elemento positivo na linha, logo a solução é ilimitada
 		 throw new RuntimeException("Solução Ótima Ilimitada");
 	}
 
+	/**
+	 * Método auxiliar para o desenvolvedor para imprmir a tabela com os valores
+	 */
 	private  void imprimirTabela() {
 		System.out.println();
 		System.out.println("------------------TABELA COM VALORES ------------------");
