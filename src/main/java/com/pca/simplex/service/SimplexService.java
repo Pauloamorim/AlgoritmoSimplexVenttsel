@@ -142,6 +142,7 @@ public final class SimplexService {
 			BigDecimal identificadorVariavel = new BigDecimal(dadoRestricao.getListaValoresRestricoes().get(dadoRestricao.getListaValoresRestricoes().size()-1).getNome().substring(1));
 			tabelaSubCelulaSuperior[indiceLinha][0] = identificadorVariavel;
 			tabelaSubCelulaInferior[indiceLinha][0] = identificadorVariavel;
+			listaVariaveisDecisaoRetornaraoValor.add(identificadorVariavel);
 			indiceLinha++;
 		}
 	}
@@ -500,20 +501,33 @@ public final class SimplexService {
 	 */
 	private String encontrarValoresFinaisVariaveisFuncaoObjetiva() {
 		String retorno = "";
+		
 		for (BigDecimal valorVariavelDecisao : listaVariaveisDecisaoRetornaraoValor) {
+			String aux  = "";
 			for (int i = 2; i < tabelaSubCelulaSuperior.length; i++) {
 					if(tabelaSubCelulaSuperior[i][0] == valorVariavelDecisao){
-						retorno = retorno.concat("X").concat(valorVariavelDecisao.toString()).concat(" = ").
-								concat(tabelaSubCelulaSuperior[i][1].toString()).concat(" ");
+						aux = "X".concat(valorVariavelDecisao.toString()).concat(" = ").
+								concat(tabelaSubCelulaSuperior[i][1].toString()).concat(" |   ");
 						break;
 					}
 			}
-			if(retorno == ""){
-				retorno = retorno.concat("X").concat(valorVariavelDecisao.toString()).concat(" = ").
-						concat("0").concat(" ");
+			if(aux == ""){
+				aux = "X".concat(valorVariavelDecisao.toString()).concat(" = ").
+						concat("0").concat(" |   ");
 			}
+			retorno += aux;
 		}
-		return retorno;
+		
+		//encontra o valor de Z, se ele estiver negativo por ter sido alterado de uma 
+		//função de Maximização para Minimização, multiplica por -1
+		String valordeZ = "Z -> ";
+		if(tabelaSubCelulaSuperior[1][1].compareTo(BigDecimal.ZERO) < 0)
+			valordeZ = valordeZ.concat(tabelaSubCelulaSuperior[1][1].multiply(UM_NEGATIVO).toString());
+		else
+			valordeZ = valordeZ.concat(tabelaSubCelulaSuperior[1][1].toString());
+		valordeZ = valordeZ.concat(" |   ");
+		
+		return valordeZ.concat(retorno.substring(0,retorno.lastIndexOf(" |   ")));
 	}
 
 	/**
